@@ -69,13 +69,60 @@ def format_value(value: Any, depth: int = 0) -> str:
         return f"<unrepr {type(value).__name__}>"
 
 
-def sanitize_mapping(mapping: Dict[str, Any]) -> Dict[str, str]:
-    result: Dict[str, str] = {}
+def serialize_value(value: Any, depth: int = 0) -> Dict[str, Any]:
+    type_name = type(value).__name__
+    serialized: Dict[str, Any] = {
+        "type": type_name,
+        "repr": format_value(value, depth),
+    }
+
+    if isinstance(value, bool):
+        serialized["numeric"] = int(value)
+    elif isinstance(value, (int, float)):
+        serialized["numeric"] = float(value)
+
+    if depth > 2:
+        return serialized
+
+    if isinstance(value, (list, tuple)):
+        items = []
+        for item in value[:6]:
+            items.append(serialize_value(item, depth + 1))
+        if len(value) > 6:
+            items.append({"type": "...", "repr": "...", "truncated": True})
+        serialized["items"] = items
+        serialized["kind"] = "sequence"
+    elif isinstance(value, dict):
+        entries = []
+        for key, val in list(value.items())[:6]:
+            entries.append({
+                "key": serialize_value(key, depth + 1),
+                "value": serialize_value(val, depth + 1),
+            })
+        if len(value) > 6:
+            entries.append({"truncated": True})
+        serialized["items"] = entries
+        serialized["kind"] = "mapping"
+    elif isinstance(value, (set, frozenset)):
+        items = []
+        iterable = list(value)
+        for item in iterable[:6]:
+            items.append(serialize_value(item, depth + 1))
+        if len(iterable) > 6:
+            items.append({"type": "...", "repr": "...", "truncated": True})
+        serialized["items"] = items
+        serialized["kind"] = "set"
+
+    return serialized
+
+
+def sanitize_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    result: Dict[str, Dict[str, Any]] = {}
     for key, value in mapping.items():
         key_str = str(key)
         if key_str == "__builtins__" or (key_str.startswith("__") and key_str.endswith("__")):
             continue
-        result[key_str] = format_value(value)
+        result[key_str] = serialize_value(value)
     return result
 
 

@@ -118,6 +118,22 @@ textarea#code {
     color: rgba(255, 255, 255, 0.75);
 }
 
+.progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    margin: 0.75rem 0 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(135deg, #1d8cf8, #00c6ff);
+    transition: width 0.2s ease;
+}
+
 .output {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -227,6 +243,122 @@ textarea#code {
 .step-details .exception {
     color: #ff6b6b;
     font-weight: 600;
+}
+
+.visual-overview {
+    margin-top: 1.5rem;
+}
+
+.visual-overview h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+}
+
+.visual-canvas {
+    background: #0c101a;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 1rem;
+    min-height: 160px;
+    display: grid;
+    gap: 1rem;
+}
+
+.visual-canvas .empty {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.viz-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.viz-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.viz-card-header .viz-type {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.viz-repr {
+    font-family: Consolas, "Fira Code", monospace;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.75);
+    word-break: break-word;
+}
+
+.viz-meter {
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.viz-meter-bar {
+    height: 100%;
+    background: linear-gradient(135deg, #ff8a00, #e52e71);
+    transition: width 0.2s ease;
+}
+
+.viz-meter-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.viz-chart {
+    display: flex;
+    gap: 0.4rem;
+    align-items: flex-end;
+    min-height: 80px;
+}
+
+.viz-chart-bar {
+    flex: 1 1 20px;
+    background: linear-gradient(180deg, rgba(0, 198, 255, 0.9), rgba(29, 140, 248, 0.2));
+    border-radius: 4px 4px 0 0;
+    position: relative;
+}
+
+.viz-chart-bar::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, -4px);
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.viz-sequence-values {
+    font-family: Consolas, "Fira Code", monospace;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.viz-sequence-values span {
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 0.2rem 0.45rem;
+}
+
+.visual-canvas .note {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.45);
 }
 
 footer {

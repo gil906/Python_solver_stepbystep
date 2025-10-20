@@ -29,6 +29,9 @@ for number in range(3):
                 <button id="next-btn" type="button" disabled>Next &raquo;</button>
                 <span id="status" role="status"></span>
             </div>
+            <div class="progress-track" aria-hidden="true">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
             <div class="output">
                 <div class="output-column">
                     <h2>stdout</h2>
@@ -48,6 +51,10 @@ for number in range(3):
             <div class="state-view">
                 <h2>State Inspector</h2>
                 <div id="step-details" class="step-details"></div>
+                <div class="visual-overview">
+                    <h3>Visual Overview</h3>
+                    <div id="visual-canvas" class="visual-canvas" aria-live="polite"></div>
+                </div>
             </div>
         </section>
     </main>
