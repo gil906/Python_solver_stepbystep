@@ -6,10 +6,11 @@ const statusEl = document.getElementById("status");
 const stdoutEl = document.getElementById("stdout");
 const errorEl = document.getElementById("error");
 const codeLinesEl = document.getElementById("code-lines");
-const stepDetailsEl = document.getElementById("step-details");
 const loadSampleBtn = document.getElementById("load-sample");
-const visualCanvasEl = document.getElementById("visual-canvas");
-const progressBar = document.getElementById("progress-bar");
+const framesContainer = document.getElementById("frames");
+const objectsContainer = document.getElementById("objects");
+const slider = document.getElementById("step-slider");
+const arrowsSvg = document.getElementById("ref-arrows");
 
 let trace = [];
 let currentIndex = -1;
@@ -17,444 +18,688 @@ let truncated = false;
 let timedOut = false;
 
 async function runCode() {
-    const code = codeInput.value;
-    if (!code.trim()) {
-        statusEl.textContent = "Please enter some Python code.";
-        return;
-    }
+	const code = codeInput.value;
+	if (!code.trim()) {
+		statusEl.textContent = "Please enter some Python code.";
+		return;
+	}
 
-    trace = [];
-    currentIndex = -1;
-    truncated = false;
-    timedOut = false;
-    toggleControls(true);
-    statusEl.textContent = "Running & capturing execution...";
-    stdoutEl.textContent = "";
-    errorEl.textContent = "";
-    stepDetailsEl.innerHTML = "";
-    renderCodeLines(code);
-    renderVisuals(null, "Collecting trace...");
-    updateProgressBar();
+	trace = [];
+	currentIndex = -1;
+	truncated = false;
+	timedOut = false;
 
-    try {
-        const response = await fetch("/api/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code })
-        });
+	toggleControls(true);
+	statusEl.textContent = "Running & capturing execution...";
+	stdoutEl.textContent = "";
+	errorEl.textContent = "";
+	renderCodeLines(code);
+	renderFramesPlaceholder("Collecting trace...");
+	renderObjectsPlaceholder("Collecting trace...");
+	updateSlider();
 
-        if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
-        }
+	try {
+		const response = await fetch("/api/run", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ code })
+		});
 
-        const result = await response.json();
-        trace = Array.isArray(result.trace) ? result.trace : [];
-        truncated = Boolean(result.truncated);
-        timedOut = Boolean(result.timedOut);
+		if (!response.ok) {
+			throw new Error(`Server responded with ${response.status}`);
+		}
 
-        stdoutEl.textContent = result.stdout || "";
-        errorEl.textContent = result.error || "";
+		const result = await response.json();
+		trace = Array.isArray(result.trace) ? result.trace : [];
+		truncated = Boolean(result.truncated);
+		timedOut = Boolean(result.timedOut);
 
-        if (trace.length === 0) {
-            currentIndex = -1;
-            statusEl.textContent = timedOut
-                ? "Execution timed out before producing a trace."
-                : "No trace available. Did your code run without hitting any Python lines?";
-            renderVisuals(null, timedOut ? "Timed out." : "No visual data captured.");
-            updateProgressBar();
-            updateControls();
-            return;
-        }
+		stdoutEl.textContent = result.stdout || "";
+		errorEl.textContent = result.error || "";
 
-        currentIndex = 0;
-        showStep(trace[currentIndex]);
-        statusEl.textContent = buildStatusMessage();
-    } catch (error) {
-        console.error(error);
-        statusEl.textContent = "Failed to execute code. Check the console for details.";
-        errorEl.textContent = error instanceof Error ? error.message : String(error);
-        trace = [];
-        currentIndex = -1;
-        renderVisuals(null, "Unable to visualise state.");
-    } finally {
-        toggleControls(false);
-        updateProgressBar();
-        updateControls();
-    }
+		if (trace.length === 0) {
+			currentIndex = -1;
+			const message = timedOut
+				? "Execution timed out before producing a trace."
+				: "No trace available. Did your code finish immediately?";
+			statusEl.textContent = message;
+			renderFramesPlaceholder(message);
+			renderObjectsPlaceholder(message);
+			updateSlider();
+			return;
+		}
+
+		currentIndex = 0;
+		showStep(trace[currentIndex]);
+	} catch (error) {
+		console.error(error);
+		statusEl.textContent = "Failed to execute code. Check the console for details.";
+		errorEl.textContent = error instanceof Error ? error.message : String(error);
+		trace = [];
+		currentIndex = -1;
+		renderFramesPlaceholder("Unable to capture frames.");
+		renderObjectsPlaceholder("Unable to capture objects.");
+	} finally {
+		toggleControls(false);
+		updateControls();
+	}
 }
 
 function toggleControls(isRunning) {
-    runBtn.disabled = isRunning;
-    prevBtn.disabled = isRunning || currentIndex <= 0;
-    nextBtn.disabled = isRunning || trace.length === 0 || currentIndex >= trace.length - 1;
+	runBtn.disabled = isRunning;
+	prevBtn.disabled = isRunning || currentIndex <= 0;
+	nextBtn.disabled = isRunning || trace.length === 0 || currentIndex >= trace.length - 1;
+	if (slider) {
+		slider.disabled = isRunning || trace.length === 0;
+	}
 }
 
 function updateControls() {
-    prevBtn.disabled = trace.length === 0 || currentIndex <= 0;
-    nextBtn.disabled = trace.length === 0 || currentIndex >= trace.length - 1;
+	prevBtn.disabled = trace.length === 0 || currentIndex <= 0;
+	nextBtn.disabled = trace.length === 0 || currentIndex >= trace.length - 1;
+	updateSlider();
 }
 
-function buildStatusMessage() {
-    let parts = [`Step ${currentIndex + 1} of ${trace.length}`];
-    if (truncated) {
-        parts.push(`Stopped early at ${trace.length} steps.`);
-    }
-    if (timedOut) {
-        parts.push("Execution timed out.");
-    }
-    return parts.join(" · ");
+function updateSlider() {
+	if (!slider) {
+		return;
+	}
+	if (trace.length === 0 || currentIndex < 0) {
+		slider.disabled = true;
+		slider.min = 0;
+		slider.max = 0;
+		slider.value = 0;
+		slider.setAttribute("aria-valuetext", "No steps");
+		return;
+	}
+	slider.disabled = false;
+	slider.min = 1;
+	slider.max = trace.length;
+	slider.value = currentIndex + 1;
+	slider.setAttribute("aria-valuenow", slider.value);
+	slider.setAttribute("aria-valuetext", `Step ${currentIndex + 1} of ${trace.length}`);
+}
+
+function buildStatusMessage(step) {
+	if (!step || trace.length === 0 || currentIndex < 0) {
+		return "No trace loaded.";
+	}
+	const parts = [`Step ${currentIndex + 1} of ${trace.length}`];
+	if (step.event) {
+		parts.push(step.event);
+	}
+	if (typeof step.line === "number") {
+		parts.push(`line ${step.line}`);
+	}
+	if (step.exception && step.exception.type) {
+		parts.push(step.exception.type);
+	}
+	if (truncated) {
+		parts.push("trace truncated");
+	}
+	if (timedOut) {
+		parts.push("timed out");
+	}
+	return parts.join(" - ");
 }
 
 function renderCodeLines(code) {
-    codeLinesEl.innerHTML = "";
-    const lines = code.split("\n");
-    if (lines.length === 0) {
-        return;
-    }
+	if (!codeLinesEl) {
+		return;
+	}
+	codeLinesEl.innerHTML = "";
+	const lines = code.split("\n");
+	lines.forEach((line, index) => {
+		const wrapper = document.createElement("div");
+		wrapper.className = "code-line";
+		wrapper.dataset.line = String(index + 1);
 
-    lines.forEach((line, index) => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "code-line";
-        wrapper.dataset.line = String(index + 1);
+		const number = document.createElement("span");
+		number.className = "line-number";
+		number.textContent = String(index + 1);
 
-        const number = document.createElement("span");
-        number.className = "line-number";
-        number.textContent = String(index + 1);
+		const text = document.createElement("pre");
+		text.className = "line-code";
+		text.textContent = line === "" ? " " : line;
 
-        const text = document.createElement("pre");
-        text.className = "line-code";
-        text.textContent = line === "" ? " " : line;
-
-        wrapper.append(number, text);
-        codeLinesEl.appendChild(wrapper);
-    });
+		wrapper.append(number, text);
+		codeLinesEl.appendChild(wrapper);
+	});
 }
 
 function highlightLine(lineNumber) {
-    const nodes = codeLinesEl.querySelectorAll(".code-line");
-    nodes.forEach(node => node.classList.remove("active"));
+	if (!codeLinesEl) {
+		return;
+	}
+	const nodes = codeLinesEl.querySelectorAll(".code-line");
+	nodes.forEach(node => node.classList.remove("active"));
 
-    if (!lineNumber) {
-        return;
-    }
+	if (!lineNumber) {
+		return;
+	}
 
-    const target = codeLinesEl.querySelector(`.code-line[data-line='${lineNumber}']`);
-    if (target) {
-        target.classList.add("active");
-        target.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
+	const target = codeLinesEl.querySelector(`.code-line[data-line='${lineNumber}']`);
+	if (target) {
+		target.classList.add("active");
+		target.scrollIntoView({ block: "center", behavior: "smooth" });
+	}
 }
 
 function showStep(step) {
-    if (!step) {
-        return;
-    }
+	if (!step) {
+		return;
+	}
 
-    highlightLine(step.line);
-
-    const localsFormatted = formatMapping(step.locals);
-    const globalsFormatted = formatMapping(step.globals);
-    const stackFormatted = formatStack(step.stack);
-
-    const metaLines = [
-        `<div><strong>Event:</strong> ${step.event}</div>`,
-        `<div><strong>Line:</strong> ${step.line ?? "-"}</div>`
-    ];
-
-    if (step.return_value) {
-        metaLines.push(`<div><strong>Return:</strong> ${step.return_value}</div>`);
-    }
-    if (step.exception) {
-        metaLines.push(`<div class="exception"><strong>Exception:</strong> ${step.exception.type}: ${step.exception.value}</div>`);
-    }
-
-    stepDetailsEl.innerHTML = `
-        <div class="step-meta">
-            ${metaLines.join("")}
-        </div>
-        <h3>Current Frame Locals</h3>
-        <pre>${localsFormatted || "(no locals)"}</pre>
-        <h3>Globals</h3>
-        <pre>${globalsFormatted || "(no globals)"}</pre>
-        <h3>Call Stack</h3>
-        ${stackFormatted || '<p class="empty">(stack empty)</p>'}
-    `;
-
-    statusEl.textContent = buildStatusMessage();
-    renderVisuals(step);
-    updateProgressBar();
+	highlightLine(step.line);
+	renderFrames(step);
+	renderObjects(step.heap);
+	statusEl.textContent = buildStatusMessage(step);
+	updateSlider();
+	drawReferenceArrows();
 }
 
-function formatMapping(mapping) {
-    if (!mapping || typeof mapping !== "object") {
-        return "";
-    }
-    const entries = Object.entries(mapping);
-    if (entries.length === 0) {
-        return "";
-    }
-    return entries
-        .map(([key, value]) => {
-            if (value && typeof value === "object" && "repr" in value) {
-                return `${key}: ${value.repr}`;
-            }
-            return `${key}: ${String(value)}`;
-        })
-        .join("\n");
+function renderFrames(step) {
+	if (!framesContainer) {
+		return;
+	}
+	framesContainer.innerHTML = "";
+
+	const frames = [];
+	const globalFrame = {
+		title: "Global frame",
+		line: null,
+		locals: step.globals || {},
+		isCurrent: false,
+	};
+	frames.push(globalFrame);
+
+	let appended = false;
+	if (Array.isArray(step.stack) && step.stack.length > 0) {
+		step.stack.forEach((frame, index) => {
+			const name = frame.function || "<module>";
+			if (name === "<module>") {
+				return;
+			}
+			frames.push({
+				title: name,
+				line: frame.line ?? null,
+				locals: frame.locals || {},
+				isCurrent: index === step.stack.length - 1,
+			});
+			appended = true;
+		});
+	}
+
+	if (!appended) {
+		globalFrame.isCurrent = true;
+		if (typeof step.line === "number") {
+			globalFrame.line = step.line;
+		}
+	}
+
+	const fragment = document.createDocumentFragment();
+	frames.forEach((frame, index) => {
+		const card = document.createElement("div");
+		card.className = "frame-card";
+		if (frame.isCurrent || index === frames.length - 1) {
+			card.classList.add("is-current");
+		}
+
+		const header = document.createElement("div");
+		header.className = "frame-header";
+		const title = document.createElement("span");
+		title.textContent = frame.title;
+		const line = document.createElement("span");
+		line.className = "frame-line";
+		line.textContent = frame.line ? `line ${frame.line}` : "";
+		header.append(title, line);
+		card.appendChild(header);
+
+		const varsContainer = document.createElement("div");
+		varsContainer.className = "frame-vars";
+
+		const entries = getMappingEntries(frame.locals);
+		if (entries.length === 0) {
+			const empty = document.createElement("p");
+			empty.className = "empty-message";
+			empty.textContent = "(no locals)";
+			varsContainer.appendChild(empty);
+		} else {
+			entries.forEach(([name, descriptor]) => {
+				varsContainer.appendChild(createVariableRow(name, descriptor));
+			});
+		}
+
+		card.appendChild(varsContainer);
+		fragment.appendChild(card);
+	});
+
+	framesContainer.appendChild(fragment);
 }
 
-function formatStack(stack) {
-    if (!Array.isArray(stack) || stack.length === 0) {
-        return "";
-    }
-    return stack
-        .map(frame => {
-            const locals = formatMapping(frame.locals) || "(no locals)";
-            return `
-                <div class="frame">
-                    <div class="frame-header">${frame.function} &mdash; line ${frame.line}</div>
-                    <pre>${locals}</pre>
-                </div>
-            `;
-        })
-        .join("");
+function renderFramesPlaceholder(message) {
+	if (!framesContainer) {
+		return;
+	}
+	framesContainer.innerHTML = "";
+	const note = document.createElement("p");
+	note.className = "empty-message";
+	note.textContent = message;
+	framesContainer.appendChild(note);
+	clearReferenceArrows();
 }
 
-function updateProgressBar() {
-    if (!progressBar) {
-        return;
-    }
-    if (trace.length === 0 || currentIndex < 0) {
-        progressBar.style.width = "0%";
-        return;
-    }
-    const ratio = Math.max(0, Math.min(1, (currentIndex + 1) / trace.length));
-    progressBar.style.width = `${(ratio * 100).toFixed(0)}%`;
+function createVariableRow(name, descriptor) {
+	const row = document.createElement("div");
+	row.className = "frame-var";
+
+	const mainLine = document.createElement("div");
+	mainLine.className = "var-row";
+
+	const nameEl = document.createElement("span");
+	nameEl.className = "var-name";
+	nameEl.textContent = name;
+
+	const valueEl = document.createElement("span");
+	valueEl.className = "var-value";
+
+	const reprText = descriptor && typeof descriptor.repr === "string" ? descriptor.repr : "(unavailable)";
+	valueEl.textContent = reprText;
+
+	const anchor = document.createElement("span");
+	anchor.className = "var-anchor";
+	if (!descriptor || !descriptor.ref) {
+		anchor.classList.add("is-empty");
+	}
+
+	mainLine.append(nameEl, valueEl, anchor);
+
+	if (descriptor && descriptor.ref) {
+		valueEl.classList.add("has-ref");
+		attachRefHandlers(anchor, descriptor.ref);
+		attachRefHandlers(row, descriptor.ref);
+		attachRefHandlers(valueEl, descriptor.ref);
+		anchor.dataset.refTarget = descriptor.ref;
+	}
+
+	row.appendChild(mainLine);
+
+	if (descriptor && descriptor.ref) {
+		const meta = document.createElement("div");
+		meta.className = "var-meta";
+		const typeLabel = descriptor.type || "object";
+		meta.textContent = `${typeLabel} ref ${descriptor.ref}`;
+		row.appendChild(meta);
+		meta.dataset.refTarget = descriptor.ref;
+	}
+
+	return row;
 }
 
-function renderVisuals(step, placeholderMessage) {
-    if (!visualCanvasEl) {
-        return;
-    }
-    visualCanvasEl.innerHTML = "";
-
-    if (!step) {
-        const message = document.createElement("p");
-        message.className = "empty";
-        message.textContent = placeholderMessage || "Run the visualizer to see variables change.";
-        visualCanvasEl.appendChild(message);
-        appendTraceNotes();
-        return;
-    }
-
-    const locals = step.locals && typeof step.locals === "object" ? step.locals : {};
-    const names = Object.keys(locals).sort();
-
-    if (names.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "empty";
-        empty.textContent = "No local variables are available at this step.";
-        visualCanvasEl.appendChild(empty);
-        appendTraceNotes();
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-
-    names.forEach(name => {
-        const descriptor = locals[name];
-        const card = document.createElement("div");
-        card.className = "viz-card";
-
-        const header = document.createElement("div");
-        header.className = "viz-card-header";
-
-        const title = document.createElement("span");
-        title.textContent = name;
-
-        const type = document.createElement("span");
-        type.className = "viz-type";
-        type.textContent = descriptor && typeof descriptor.type === "string" ? descriptor.type : "unknown";
-
-        header.append(title, type);
-        card.appendChild(header);
-
-        const repr = document.createElement("div");
-        repr.className = "viz-repr";
-        repr.textContent = descriptor && typeof descriptor.repr === "string" ? descriptor.repr : "";
-        card.appendChild(repr);
-
-        if (descriptor && typeof descriptor.numeric === "number" && Number.isFinite(descriptor.numeric)) {
-            card.appendChild(createNumericMeter(descriptor.numeric));
-        }
-
-        if (descriptor && Array.isArray(descriptor.items) && descriptor.items.length > 0) {
-            if (descriptor.kind === "mapping") {
-                card.appendChild(createMappingList(descriptor.items));
-            } else if (descriptor.kind === "sequence" || descriptor.kind === "set") {
-                const chart = createSequenceChart(descriptor.items);
-                if (chart) {
-                    card.appendChild(chart);
-                }
-                card.appendChild(createSequenceValues(descriptor.items, descriptor.kind));
-            }
-        }
-
-        fragment.appendChild(card);
-    });
-
-    visualCanvasEl.appendChild(fragment);
-    appendTraceNotes();
+function getMappingEntries(mapping) {
+	if (!mapping || typeof mapping !== "object") {
+		return [];
+	}
+	const entries = Object.entries(mapping);
+	entries.sort((a, b) => a[0].localeCompare(b[0]));
+	return entries.slice(0, 24);
 }
 
-function appendTraceNotes() {
-    if (!visualCanvasEl || (!truncated && !timedOut)) {
-        return;
-    }
-    const note = document.createElement("p");
-    note.className = "note";
-    if (truncated && timedOut) {
-        note.textContent = "Trace truncated and execution timed out; visuals may be incomplete.";
-    } else if (truncated) {
-        note.textContent = "Trace stopped after reaching the maximum number of steps.";
-    } else {
-        note.textContent = "Execution timed out before completion.";
-    }
-    visualCanvasEl.appendChild(note);
+function renderObjects(heap) {
+	if (!objectsContainer) {
+		return;
+	}
+	objectsContainer.innerHTML = "";
+
+	if (!heap || typeof heap !== "object" || Object.keys(heap).length === 0) {
+		renderObjectsPlaceholder("No heap objects captured.");
+		return;
+	}
+
+	const entries = Object.entries(heap).sort((a, b) => a[0].localeCompare(b[0]));
+	const fragment = document.createDocumentFragment();
+
+	entries.forEach(([ref, descriptor]) => {
+		fragment.appendChild(createObjectCard(ref, descriptor));
+	});
+
+	if (truncated || timedOut) {
+		const note = document.createElement("p");
+		note.className = "empty-message";
+		if (truncated && timedOut) {
+			note.textContent = "Trace truncated and execution timed out; heap may be incomplete.";
+		} else if (truncated) {
+			note.textContent = "Trace truncated after reaching the step limit.";
+		} else {
+			note.textContent = "Execution timed out before completion.";
+		}
+		fragment.appendChild(note);
+	}
+
+	objectsContainer.appendChild(fragment);
 }
 
-function createNumericMeter(value) {
-    const container = document.createElement("div");
-
-    const meter = document.createElement("div");
-    meter.className = "viz-meter";
-
-    const bar = document.createElement("div");
-    bar.className = "viz-meter-bar";
-    const magnitude = Math.min(Math.abs(value), 1000);
-    const percent = Math.max(5, (magnitude / 1000) * 100);
-    bar.style.width = `${percent}%`;
-    if (value < 0) {
-        bar.style.background = "linear-gradient(135deg, #ff416c, #ff4b2b)";
-    }
-    meter.appendChild(bar);
-
-    const label = document.createElement("div");
-    label.className = "viz-meter-label";
-    label.textContent = `Value: ${value}`;
-
-    container.append(meter, label);
-    return container;
+function renderObjectsPlaceholder(message) {
+	if (!objectsContainer) {
+		return;
+	}
+	objectsContainer.innerHTML = "";
+	const note = document.createElement("p");
+	note.className = "empty-message";
+	note.textContent = message;
+	objectsContainer.appendChild(note);
+	clearReferenceArrows();
 }
 
-function createSequenceChart(items) {
-    const numericItems = items.filter(item => item && typeof item.numeric === "number" && Number.isFinite(item.numeric));
-    if (numericItems.length === 0) {
-        return null;
-    }
+function createObjectCard(ref, descriptor) {
+	const card = document.createElement("div");
+	card.className = "heap-object";
+	attachRefHandlers(card, ref);
+	card.dataset.refTarget = ref;
 
-    const maxMagnitude = Math.max(...numericItems.map(item => Math.abs(item.numeric)), 0);
-    const chart = document.createElement("div");
-    chart.className = "viz-chart";
+	const header = document.createElement("div");
+	header.className = "heap-object-header";
+	const typeEl = document.createElement("span");
+	typeEl.textContent = descriptor && descriptor.type ? descriptor.type : "object";
+	const summaryEl = document.createElement("span");
+	summaryEl.className = "heap-type";
+	const summaryParts = [];
+	if (descriptor && typeof descriptor.length === "number") {
+		summaryParts.push(`len ${descriptor.length}`);
+	}
+	if (descriptor && descriptor.kind && descriptor.kind !== "sequence") {
+		summaryParts.push(descriptor.kind);
+	}
+	summaryEl.textContent = summaryParts.join(" | ");
+	header.append(typeEl, summaryEl);
+	card.appendChild(header);
 
-    numericItems.forEach(item => {
-        const bar = document.createElement("div");
-        bar.className = "viz-chart-bar";
-        const magnitude = Math.abs(item.numeric);
-        const height = maxMagnitude === 0 ? 6 : Math.max(6, (magnitude / maxMagnitude) * 100);
-        bar.style.height = `${height}%`;
-        bar.dataset.label = item.numeric.toString();
-        chart.appendChild(bar);
-    });
+	if (descriptor && typeof descriptor.repr === "string") {
+		const meta = document.createElement("div");
+		meta.className = "heap-meta";
+		meta.textContent = descriptor.repr;
+		card.appendChild(meta);
+	}
 
-    return chart;
+	const refEl = document.createElement("div");
+	refEl.className = "heap-ref";
+	refEl.textContent = ref;
+	card.appendChild(refEl);
+
+	if (!descriptor) {
+		return card;
+	}
+
+	if (descriptor.kind === "sequence" && Array.isArray(descriptor.items)) {
+		const list = document.createElement("div");
+		list.className = "heap-items";
+		descriptor.items.forEach((item, index) => {
+			list.appendChild(createSequenceItem(index, item));
+		});
+		card.appendChild(list);
+	} else if (descriptor.kind === "mapping" && Array.isArray(descriptor.entries)) {
+		const entries = document.createElement("div");
+		entries.className = "heap-entries";
+		descriptor.entries.forEach(entry => {
+			entries.appendChild(createMappingEntry(entry));
+		});
+		card.appendChild(entries);
+	} else if (descriptor.kind === "set" && Array.isArray(descriptor.items)) {
+		const items = document.createElement("div");
+		items.className = "heap-items";
+		descriptor.items.forEach((item, index) => {
+			items.appendChild(createSequenceItem(index, item, true));
+		});
+		card.appendChild(items);
+	} else if (descriptor.kind === "object" && descriptor.attributes) {
+		const attributes = document.createElement("div");
+		attributes.className = "heap-attributes";
+		Object.entries(descriptor.attributes).forEach(([key, value]) => {
+			attributes.appendChild(createAttributeRow(key, value));
+		});
+		card.appendChild(attributes);
+	}
+
+	return card;
 }
 
-function createSequenceValues(items, kind) {
-    const container = document.createElement("div");
-    container.className = "viz-sequence-values";
-
-    if (!Array.isArray(items) || items.length === 0) {
-        const empty = document.createElement("span");
-        empty.textContent = "(empty)";
-        container.appendChild(empty);
-        return container;
-    }
-
-    items.forEach((item, index) => {
-        const badge = document.createElement("span");
-        if (item && item.truncated) {
-            badge.textContent = "...";
-        } else if (item && typeof item.repr === "string") {
-            badge.textContent = kind === "set" ? item.repr : `${index}: ${item.repr}`;
-        } else {
-            badge.textContent = kind === "set" ? "(?)" : `${index}: (?)`;
-        }
-        container.appendChild(badge);
-    });
-
-    return container;
+function createSequenceItem(index, item, isSet = false) {
+	const row = document.createElement("div");
+	row.className = "heap-item";
+	const label = document.createElement("span");
+	label.className = "heap-label";
+	label.textContent = isSet ? "*" : `[${index}]`;
+	const value = createInlineDescriptor(item);
+	row.append(label, value);
+	return row;
 }
 
-function createMappingList(entries) {
-    const container = document.createElement("div");
-    container.className = "viz-sequence-values";
+function createMappingEntry(entry) {
+	const row = document.createElement("div");
+	row.className = "heap-entry";
+	if (!entry || entry.truncated) {
+		const truncated = document.createElement("span");
+		truncated.className = "inline-descriptor";
+		truncated.textContent = "...";
+		row.appendChild(truncated);
+		return row;
+	}
+	const key = createInlineDescriptor(entry.key);
+	const arrow = document.createElement("span");
+	arrow.textContent = ":";
+	arrow.className = "heap-label";
+	const value = createInlineDescriptor(entry.value);
+	row.append(key, arrow, value);
+	return row;
+}
 
-    if (!Array.isArray(entries) || entries.length === 0) {
-        const empty = document.createElement("span");
-        empty.textContent = "(empty)";
-        container.appendChild(empty);
-        return container;
-    }
+function createAttributeRow(key, value) {
+	const row = document.createElement("div");
+	row.className = "heap-attribute";
+	const name = document.createElement("span");
+	name.className = "heap-label";
+	name.textContent = key;
+	const descriptor = createInlineDescriptor(value);
+	row.append(name, descriptor);
+	return row;
+}
 
-    entries.forEach(entry => {
-        const badge = document.createElement("span");
-        if (entry && entry.truncated) {
-            badge.textContent = "...";
-        } else {
-            const key = entry && entry.key && typeof entry.key.repr === "string" ? entry.key.repr : "?";
-            const value = entry && entry.value && typeof entry.value.repr === "string" ? entry.value.repr : "?";
-            badge.textContent = `${key}: ${value}`;
-        }
-        container.appendChild(badge);
-    });
+function createInlineDescriptor(descriptor) {
+	const span = document.createElement("span");
+	span.className = "inline-descriptor";
+	if (!descriptor) {
+		span.textContent = "(?)";
+		return span;
+	}
+	if (descriptor.truncated) {
+		span.textContent = "...";
+		return span;
+	}
+	if (descriptor.ref) {
+		if (descriptor.repr) {
+			span.textContent = descriptor.repr;
+			span.title = descriptor.ref;
+		} else {
+			span.textContent = descriptor.ref;
+		}
+		attachRefHandlers(span, descriptor.ref);
+		return span;
+	}
+	if (typeof descriptor.repr === "string") {
+		span.textContent = descriptor.repr;
+		return span;
+	}
+	span.textContent = "(?)";
+	return span;
+}
 
-    return container;
+function attachRefHandlers(element, ref) {
+	if (!element || !ref) {
+		return;
+	}
+	element.dataset.refTarget = ref;
+	element.classList.add("ref-target");
+	if (!element.hasAttribute("tabindex")) {
+		element.tabIndex = 0;
+	}
+	element.addEventListener("mouseenter", () => toggleRefHighlight(ref, true));
+	element.addEventListener("mouseleave", () => toggleRefHighlight(ref, false));
+	element.addEventListener("focus", () => toggleRefHighlight(ref, true));
+	element.addEventListener("blur", () => toggleRefHighlight(ref, false));
+}
+
+function clearReferenceArrows() {
+	if (!arrowsSvg) {
+		return;
+	}
+	arrowsSvg.innerHTML = "";
+}
+
+function drawReferenceArrows() {
+	if (!arrowsSvg) {
+		return;
+	}
+	arrowsSvg.innerHTML = "";
+
+	const container = arrowsSvg.parentElement;
+	if (!container) {
+		return;
+	}
+
+	const sources = framesContainer
+		? Array.from(framesContainer.querySelectorAll(".var-anchor[data-ref-target]"))
+		: [];
+
+	if (sources.length === 0 || !objectsContainer) {
+		return;
+	}
+
+	const svgNS = "http://www.w3.org/2000/svg";
+	const containerRect = container.getBoundingClientRect();
+	arrowsSvg.setAttribute("width", `${containerRect.width}`);
+	arrowsSvg.setAttribute("height", `${containerRect.height}`);
+	arrowsSvg.setAttribute("viewBox", `0 0 ${containerRect.width} ${containerRect.height}`);
+
+	const defs = document.createElementNS(svgNS, "defs");
+	const marker = document.createElementNS(svgNS, "marker");
+	marker.setAttribute("id", "arrowhead");
+	marker.setAttribute("markerWidth", "10");
+	marker.setAttribute("markerHeight", "7");
+	marker.setAttribute("refX", "10");
+	marker.setAttribute("refY", "3.5");
+	marker.setAttribute("orient", "auto");
+	marker.setAttribute("markerUnits", "strokeWidth");
+	const markerPath = document.createElementNS(svgNS, "path");
+	markerPath.setAttribute("d", "M0,0 L10,3.5 L0,7 Z");
+	markerPath.setAttribute("fill", "#4da3ff");
+	marker.appendChild(markerPath);
+	defs.appendChild(marker);
+	arrowsSvg.appendChild(defs);
+
+	sources.forEach(source => {
+		const ref = source.dataset.refTarget;
+		if (!ref) {
+			return;
+		}
+		const target = objectsContainer.querySelector(`.heap-object[data-ref-target='${ref}']`);
+		if (!target) {
+			return;
+		}
+
+		const sourceRect = source.getBoundingClientRect();
+		const targetRect = target.getBoundingClientRect();
+
+		const startX = sourceRect.right - containerRect.left + 6;
+		const startY = sourceRect.top + sourceRect.height / 2 - containerRect.top;
+		const endX = targetRect.left - containerRect.left - 6;
+		const endY = targetRect.top + targetRect.height / 2 - containerRect.top;
+		const controlOffset = Math.max(60, (endX - startX) * 0.3);
+		const control1X = startX + controlOffset;
+		const control2X = endX - controlOffset * 0.5;
+
+		const path = document.createElementNS(svgNS, "path");
+		path.setAttribute("d", `M ${startX} ${startY} C ${control1X} ${startY}, ${control2X} ${endY}, ${endX} ${endY}`);
+		path.setAttribute("class", "ref-arrow-path");
+		path.setAttribute("marker-end", "url(#arrowhead)");
+		arrowsSvg.appendChild(path);
+
+		const circle = document.createElementNS(svgNS, "circle");
+		circle.setAttribute("class", "ref-arrow-circle");
+		circle.setAttribute("cx", `${startX - 6}`);
+		circle.setAttribute("cy", `${startY}`);
+		circle.setAttribute("r", "4");
+		arrowsSvg.appendChild(circle);
+	});
+}
+
+function toggleRefHighlight(ref, active) {
+	const matches = document.querySelectorAll(`[data-ref-target='${ref}']`);
+	matches.forEach(node => {
+		if (active) {
+			node.classList.add("is-highlighted");
+		} else {
+			node.classList.remove("is-highlighted");
+		}
+	});
 }
 
 runBtn.addEventListener("click", runCode);
 
 prevBtn.addEventListener("click", () => {
-    if (currentIndex <= 0) {
-        return;
-    }
-    currentIndex -= 1;
-    showStep(trace[currentIndex]);
-    updateControls();
+	if (currentIndex <= 0) {
+		return;
+	}
+	currentIndex -= 1;
+	showStep(trace[currentIndex]);
+	updateControls();
 });
 
 nextBtn.addEventListener("click", () => {
-    if (currentIndex >= trace.length - 1) {
-        return;
-    }
-    currentIndex += 1;
-    showStep(trace[currentIndex]);
-    updateControls();
+	if (currentIndex >= trace.length - 1) {
+		return;
+	}
+	currentIndex += 1;
+	showStep(trace[currentIndex]);
+	updateControls();
 });
 
+if (slider) {
+	slider.addEventListener("input", event => {
+		if (trace.length === 0) {
+			return;
+		}
+		const position = Number(event.target.value) - 1;
+		if (Number.isNaN(position)) {
+			return;
+		}
+		const clamped = Math.max(0, Math.min(trace.length - 1, position));
+		if (clamped === currentIndex) {
+			return;
+		}
+		currentIndex = clamped;
+		showStep(trace[currentIndex]);
+		updateControls();
+	});
+}
+
 loadSampleBtn.addEventListener("click", () => {
-    codeInput.value = `def factorial(n):
-    if n <= 1:
-        return 1
-    return n * factorial(n - 1)
+	codeInput.value = `def factorial(n):
+	if n <= 1:
+		return 1
+	return n * factorial(n - 1)
 
 value = 4
 result = factorial(value)
 print(f"{value}! = {result}")`;
-    renderCodeLines(codeInput.value);
+	renderCodeLines(codeInput.value);
 });
 
-// Initialise display with current textarea content
 renderCodeLines(codeInput.value);
-renderVisuals(null, "Run the visualizer to see variables change.");
-updateProgressBar();
+renderFramesPlaceholder("Run the visualizer to populate frames.");
+renderObjectsPlaceholder("Run the visualizer to populate objects.");
+updateSlider();
+drawReferenceArrows();
+
+window.addEventListener("resize", () => {
+	drawReferenceArrows();
+});

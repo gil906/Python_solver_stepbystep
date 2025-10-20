@@ -116,17 +116,124 @@ def serialize_value(value: Any, depth: int = 0) -> Dict[str, Any]:
     return serialized
 
 
-def sanitize_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+MAX_PREVIEW_ITEMS = 6
+MAX_REFERENCE_DEPTH = 3
+
+
+def serialize_scalar(value: Any) -> Dict[str, Any]:
+    descriptor: Dict[str, Any] = {
+        "type": type(value).__name__,
+        "repr": format_value(value),
+    }
+    if isinstance(value, bool):
+        descriptor["numeric"] = int(value)
+    elif isinstance(value, (int, float)):
+        descriptor["numeric"] = float(value)
+    if isinstance(value, str):
+        descriptor["length"] = len(value)
+    return descriptor
+
+
+def serialize_reference(value: Any, heap: Dict[str, Any], depth: int = 0) -> Dict[str, Any]:
+    if isinstance(value, (int, float, bool, type(None), str)):
+        return serialize_scalar(value)
+
+    if depth >= MAX_REFERENCE_DEPTH:
+        descriptor = serialize_scalar(value)
+        descriptor["truncated"] = True
+        return descriptor
+
+    obj_id = id(value)
+    ref = f"obj_{obj_id}"
+    descriptor: Dict[str, Any] = {
+        "type": type(value).__name__,
+        "repr": format_value(value),
+        "ref": ref,
+    }
+
+    if ref in heap:
+        return descriptor
+
+    heap_entry: Dict[str, Any] = {
+        "type": descriptor["type"],
+        "repr": descriptor["repr"],
+        "id": ref,
+    }
+    heap[ref] = heap_entry
+
+    if isinstance(value, (list, tuple)):
+        heap_entry["kind"] = "sequence"
+        heap_entry["length"] = len(value)
+        items: List[Dict[str, Any]] = []
+        for item in list(value)[:MAX_PREVIEW_ITEMS]:
+            items.append(serialize_reference(item, heap, depth + 1))
+        if len(value) > MAX_PREVIEW_ITEMS:
+            items.append({"truncated": True})
+        heap_entry["items"] = items
+    elif isinstance(value, dict):
+        heap_entry["kind"] = "mapping"
+        heap_entry["length"] = len(value)
+        entries: List[Dict[str, Any]] = []
+        for key, val in list(value.items())[:MAX_PREVIEW_ITEMS]:
+            entries.append(
+                {
+                    "key": serialize_reference(key, heap, depth + 1),
+                    "value": serialize_reference(val, heap, depth + 1),
+                }
+            )
+        if len(value) > MAX_PREVIEW_ITEMS:
+            entries.append({"truncated": True})
+        heap_entry["entries"] = entries
+    elif isinstance(value, (set, frozenset)):
+        heap_entry["kind"] = "set"
+        iterable = list(value)
+        iterable.sort(key=lambda item: format_value(item))
+        items = [serialize_reference(item, heap, depth + 1) for item in iterable[:MAX_PREVIEW_ITEMS]]
+        if len(iterable) > MAX_PREVIEW_ITEMS:
+            items.append({"truncated": True})
+        heap_entry["items"] = items
+        heap_entry["length"] = len(iterable)
+    elif hasattr(value, "__dict__"):
+        heap_entry["kind"] = "object"
+        attributes: Dict[str, Any] = {}
+        try:
+            attr_items = list(vars(value).items())
+        except TypeError:
+            attr_items = []
+        for attr_name, attr_value in attr_items[:MAX_PREVIEW_ITEMS]:
+            attributes[str(attr_name)] = serialize_reference(attr_value, heap, depth + 1)
+        if len(attr_items) > MAX_PREVIEW_ITEMS:
+            attributes["..."] = {"truncated": True}
+        if attributes:
+            heap_entry["attributes"] = attributes
+    else:
+        heap_entry["kind"] = "opaque"
+
+    return descriptor
+
+
+def sanitize_mapping(mapping: Dict[str, Any], heap: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     result: Dict[str, Dict[str, Any]] = {}
-    for key, value in mapping.items():
+    try:
+        items = list(mapping.items())
+    except Exception:
+        items = []
+    items.sort(key=lambda pair: str(pair[0]))
+    for key, value in items[: MAX_PREVIEW_ITEMS * 4]:
         key_str = str(key)
         if key_str == "__builtins__" or (key_str.startswith("__") and key_str.endswith("__")):
             continue
-        result[key_str] = serialize_value(value)
+        try:
+            result[key_str] = serialize_reference(value, heap)
+        except Exception:
+            result[key_str] = {
+                "type": type(value).__name__,
+                "repr": "<unserializable>",
+            }
     return result
 
 
-def capture_stack(frame) -> List[Dict[str, Any]]:
+def capture_stack(frame, heap: Dict[str, Any]) -> List[Dict[str, Any]]:
     stack: List[Dict[str, Any]] = []
     seen = set()
     current = frame
@@ -140,7 +247,7 @@ def capture_stack(frame) -> List[Dict[str, Any]]:
                 {
                     "function": current.f_code.co_name,
                     "line": current.f_lineno,
-                    "locals": sanitize_mapping(current.f_locals),
+                    "locals": sanitize_mapping(current.f_locals, heap),
                 }
             )
         current = current.f_back
@@ -161,12 +268,14 @@ def run_user_code(code: str, conn):
         if len(steps) >= MAX_STEPS:
             raise TraceLimitExceeded()
 
+        heap: Dict[str, Any] = {}
         step: Dict[str, Any] = {
             "event": event,
             "line": frame.f_lineno,
-            "locals": sanitize_mapping(frame.f_locals),
-            "globals": sanitize_mapping(frame.f_globals),
-            "stack": capture_stack(frame),
+            "locals": sanitize_mapping(frame.f_locals, heap),
+            "globals": sanitize_mapping(frame.f_globals, heap),
+            "stack": capture_stack(frame, heap),
+            "heap": heap,
         }
         if event == "return":
             step["return_value"] = format_value(arg)

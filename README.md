@@ -4,8 +4,8 @@ A lightweight clone of the Python Tutor experience that runs entirely on your ma
 
 ## Features
 - Step-by-step execution trace with locals, globals, return values, and exceptions
-- Interactive navigation controls and live progress bar for the recorded trace
-- Graphical variable cards that highlight numeric trends, sequence contents, and dictionary entries
+- Interactive navigation controls with keyboard-friendly prev/next buttons and a scrubber slider for the recorded trace
+- Python Tutor-style inspector showing stack frames, locals/globals, and a heap view with reference highlighting
 - Split view UI pairing the traced source with state inspection panels
 - Local-only runtime powered by Flask and Python's tracing hooks (no external services)
 

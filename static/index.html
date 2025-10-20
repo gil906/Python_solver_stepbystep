@@ -11,50 +11,58 @@
         <h1>Local Python Step-by-Step Visualizer</h1>
         <p>Run Python code, inspect each execution step, and examine variables locally without needing the internet.</p>
     </header>
-    <main>
-        <section class="editor">
-            <div class="editor-header">
-                <label for="code">Python Code</label>
-                <button id="load-sample" type="button">Load sample</button>
-            </div>
-            <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <main class="workspace">
+        <section class="pane editor-pane">
+            <div class="editor-top">
+                <div class="editor-header">
+                    <label for="code">Python Code</label>
+                    <button id="load-sample" type="button">Load sample</button>
+                </div>
+                <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
 print("Hello from your local visualizer!")
 for number in range(3):
     square = number * number
     print(f"{number}^2 = {square}")
-            </textarea>
-            <div class="controls">
-                <button id="run-btn" type="button">Run &amp; Visualize</button>
-                <button id="prev-btn" type="button" disabled>&laquo; Previous</button>
-                <button id="next-btn" type="button" disabled>Next &raquo;</button>
-                <span id="status" role="status"></span>
+                </textarea>
+                <div class="controls">
+                    <div class="button-group">
+                        <button id="run-btn" type="button">Run &amp; Visualize</button>
+                        <button id="prev-btn" type="button" disabled>&laquo; Previous</button>
+                        <button id="next-btn" type="button" disabled>Next &raquo;</button>
+                    </div>
+                    <span id="status" role="status"></span>
+                </div>
+                <div class="slider-row">
+                    <label for="step-slider">Trace position</label>
+                    <input id="step-slider" type="range" min="0" max="0" value="0" disabled>
+                </div>
             </div>
-            <div class="progress-track" aria-hidden="true">
-                <div id="progress-bar" class="progress-bar"></div>
+            <div class="code-trace">
+                <h2>Code Trace</h2>
+                <div id="code-lines" class="code-lines" aria-live="polite"></div>
             </div>
-            <div class="output">
-                <div class="output-column">
-                    <h2>stdout</h2>
+        </section>
+        <section class="pane inspector-pane">
+            <div class="output-section">
+                <div class="output-box">
+                    <h2>Print Output</h2>
                     <pre id="stdout" class="output-block"></pre>
                 </div>
-                <div class="output-column">
+                <div class="output-box">
                     <h2>Errors</h2>
                     <pre id="error" class="output-block error"></pre>
                 </div>
             </div>
-        </section>
-        <section class="visualizer">
-            <div class="code-view">
-                <h2>Code Trace</h2>
-                <div id="code-lines" class="code-lines" aria-live="polite"></div>
-            </div>
-            <div class="state-view">
-                <h2>State Inspector</h2>
-                <div id="step-details" class="step-details"></div>
-                <div class="visual-overview">
-                    <h3>Visual Overview</h3>
-                    <div id="visual-canvas" class="visual-canvas" aria-live="polite"></div>
+            <div class="frames-objects">
+                <div class="frames-panel">
+                    <h2>Frames</h2>
+                    <div id="frames" class="frames-list" aria-live="polite"></div>
                 </div>
+                <div class="objects-panel">
+                    <h2>Objects</h2>
+                    <div id="objects" class="objects-grid" aria-live="polite"></div>
+                </div>
+                <svg id="ref-arrows" class="ref-arrows" aria-hidden="true"></svg>
             </div>
         </section>
     </main>
