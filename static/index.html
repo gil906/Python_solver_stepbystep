@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local Python Visualizer</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Local Python Step-by-Step Visualizer</h1>
+        <p>Run Python code, inspect each execution step, and examine variables locally without needing the internet.</p>
+    </header>
+    <main>
+        <section class="editor">
+            <div class="editor-header">
+                <label for="code">Python Code</label>
+                <button id="load-sample" type="button">Load sample</button>
+            </div>
+            <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+print("Hello from your local visualizer!")
+for number in range(3):
+    square = number * number
+    print(f"{number}^2 = {square}")
+            </textarea>
+            <div class="controls">
+                <button id="run-btn" type="button">Run &amp; Visualize</button>
+                <button id="prev-btn" type="button" disabled>&laquo; Previous</button>
+                <button id="next-btn" type="button" disabled>Next &raquo;</button>
+                <span id="status" role="status"></span>
+            </div>
+            <div class="output">
+                <div class="output-column">
+                    <h2>stdout</h2>
+                    <pre id="stdout" class="output-block"></pre>
+                </div>
+                <div class="output-column">
+                    <h2>Errors</h2>
+                    <pre id="error" class="output-block error"></pre>
+                </div>
+            </div>
+        </section>
+        <section class="visualizer">
+            <div class="code-view">
+                <h2>Code Trace</h2>
+                <div id="code-lines" class="code-lines" aria-live="polite"></div>
+            </div>
+            <div class="state-view">
+                <h2>State Inspector</h2>
+                <div id="step-details" class="step-details"></div>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>This project runs entirely on your machine. Stay safe: only run code you trust.</p>
+    </footer>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+    background: #10141c;
+    color: #f4f7fb;
+    min-height: 100vh;
+}
+
+header {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    padding: 2rem 3rem 1.5rem;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+header h1 {
+    margin: 0 0 0.5rem;
+    font-size: 2rem;
+    letter-spacing: 0.02em;
+}
+
+header p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+main {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 2rem 3rem;
+    gap: 2rem;
+}
+
+.editor, .visualizer {
+    background: rgba(18, 24, 34, 0.95);
+    border-radius: 16px;
+    padding: 1.5rem;
+    flex: 1 1 420px;
+    min-width: 320px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.editor-header label {
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+#load-sample {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+#load-sample:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+textarea#code {
+    width: 100%;
+    height: 280px;
+    resize: vertical;
+    border-radius: 10px;
+    background: #0d111a;
+    color: #f8fbff;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    font-family: Consolas, "Fira Code", monospace;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.controls button {
+    background: linear-gradient(135deg, #3358d4, #1d8cf8);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.controls button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    box-shadow: none;
+}
+
+.controls button:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(29, 140, 248, 0.35);
+}
+
+#status {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.output {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.output h2 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+}
+
+.output-block {
+    background: #0c0f16;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 120px;
+    padding: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+}
+
+.output-block.error {
+    color: #f8a5c2;
+}
+
+.code-view, .state-view {
+    margin-bottom: 1.5rem;
+}
+
+.code-lines {
+    background: #0c101a;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    max-height: 420px;
+    overflow: auto;
+    font-family: Consolas, "Fira Code", monospace;
+}
+
+.code-line {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    padding: 0.4rem 0.8rem;
+    align-items: center;
+    gap: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.code-line:last-child {
+    border-bottom: none;
+}
+
+.code-line .line-number {
+    color: rgba(255, 255, 255, 0.35);
+    text-align: right;
+}
+
+.code-line .line-code {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.code-line.active {
+    background: rgba(29, 140, 248, 0.12);
+    border-left: 4px solid #1d8cf8;
+}
+
+.step-details {
+    background: #0c101a;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 1rem;
+    min-height: 220px;
+}
+
+.step-details h3 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.35rem;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+}
+
+.step-details pre {
+    margin: 0;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.6rem;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.step-details .frame {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0.6rem;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.step-details .frame-header {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.step-details .exception {
+    color: #ff6b6b;
+    font-weight: 600;
+}
+
+footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 960px) {
+    main {
+        padding: 1.5rem;
+    }
+
+    textarea#code {
+        height: 220px;
+    }
+}
